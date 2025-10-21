@@ -1,0 +1,67 @@
+1. Install Kubectl 
+https://kubernetes.io/docs/tasks/tools/install-kubectl-linux/
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+2. Install AWS cli
+https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
+aws configure
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+3. Install EKS 
+https://docs.aws.amazon.com/eks/latest/eksctl/installation.html
+eksctl version
+eksctl create cluster --name clustername --region regionname --nodegroup-name ng-core --node-type m5.large --nodes 1 --nodes-min 1 --nodes-max 2 --managed
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+4. Configure IAM OIDC provider
+export cluster_name=<CLUSTER-NAME>
+oidc_id=$(aws eks describe-cluster --name $cluster_name --query "cluster.identity.oidc.issuer" --output text | cut -d '/' -f 5) 
+aws iam list-open-id-connect-providers | grep $oidc_id | cut -d "/" -f4
+eksctl utils associate-iam-oidc-provider --cluster $cluster_name --approve
+
+In EKS, the IAM OIDC provider lets pods use IAM roles securely without storing AWS keys.
+It’s needed so each service can get only the permissions it needs to access AWS resources safely.
+
+[Pod]
+  │  (service account token)
+  ▼
+[EKS Control Plane] — signs token using private key
+  │
+  ▼
+[AWS OIDC Provider] — hosts public key to verify signature
+  │
+  ▼
+[AWS STS / IAM] — verifies token, issues temporary credentials
+  │
+  ▼
+[AWS Services] — pod now accesses securely
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+5. Setup AWS Load Balancer Controller (AWS ALB)
+- Download IAM Policy
+curl -O https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.11.0/docs/install/iam_policy.json
+
+- Create IAM Policy
+aws iam create-policy --policy-name AWSLoadBalancerControllerIAMPolicy --policy-document file://iam_policy.json
+
+- Create IAM Role: 
+eksctl create iamserviceaccount \
+  --cluster=<your-cluster-name> \
+  --namespace=kube-system \
+  --name=aws-load-balancer-controller \
+  --role-name AmazonEKSLoadBalancerControllerRole \
+  --attach-policy-arn=arn:aws:iam::<aws-account-id>:policy/AWSLoadBalancerControllerIAMPolicy \
+  --approve
+
+- Add Helm Repo
+helm repo add eks https://aws.github.io/eks-charts
+
+- Update the repo
+helm repo update eks
+
+- Install ALB Controller
+helm install aws-load-balancer-controller eks/aws-load-balancer-controller \            
+  -n kube-system \
+  --set clusterName=<your-cluster-name> \
+  --set serviceAccount.create=false \
+  --set serviceAccount.name=aws-load-balancer-controller \
+  --set region=<region> \
+  --set vpcId=<your-vpc-id>
+kubectl get deployment -n kube-system aws-load-balancer-controller
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
