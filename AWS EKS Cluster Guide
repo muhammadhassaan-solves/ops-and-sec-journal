@@ -15,23 +15,6 @@ export cluster_name=<CLUSTER-NAME>
 oidc_id=$(aws eks describe-cluster --name $cluster_name --query "cluster.identity.oidc.issuer" --output text | cut -d '/' -f 5) 
 aws iam list-open-id-connect-providers | grep $oidc_id | cut -d "/" -f4
 eksctl utils associate-iam-oidc-provider --cluster $cluster_name --approve
-
-In EKS, the IAM OIDC provider lets pods use IAM roles securely without storing AWS keys.
-It’s needed so each service can get only the permissions it needs to access AWS resources safely.
-
-[Pod]
-  │  (service account token)
-  ▼
-[EKS Control Plane] — signs token using private key
-  │
-  ▼
-[AWS OIDC Provider] — hosts public key to verify signature
-  │
-  ▼
-[AWS STS / IAM] — verifies token, issues temporary credentials
-  │
-  ▼
-[AWS Services] — pod now accesses securely
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 5. Setup AWS Load Balancer Controller (AWS ALB)
 - Download IAM Policy
@@ -65,3 +48,30 @@ helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
   --set vpcId=<your-vpc-id>
 kubectl get deployment -n kube-system aws-load-balancer-controller
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+6. EBS CSI Plugin configuration (if you need access to EBS)
+
+- eksctl create iamserviceaccount \
+    --name ebs-csi-controller-sa \
+    --namespace kube-system \
+    --cluster <YOUR-CLUSTER-NAME> \
+    --role-name AmazonEKS_EBS_CSI_DriverRole \
+    --role-only \
+    --attach-policy-arn arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy \
+    --approve
+
+- eksctl create addon --name aws-ebs-csi-driver --cluster <YOUR-CLUSTER-NAME> --service-account-role-arn arn:aws:iam::<AWS-ACCOUNT-ID>:role/AmazonEKS_EBS_CSI_DriverRole --force
+
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: ebs-gp3
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: ebs.csi.aws.com
+parameters:
+  type: gp3
+  fsType: ext4
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Delete
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------
