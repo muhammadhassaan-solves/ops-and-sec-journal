@@ -1,16 +1,17 @@
 1. EBS CSI Driver Setup
 The Amazon EBS CSI driver allows dynamic provisioning of EBS volumes for Kafka brokers’ storage.
 (Detailed Guide in my AWS EKS Cluster Guide)
-
+---------------------------------------------------------------------------------------------------------------------------------
 2. Deploy Strimzi Kafka Operator
 Install Strimzi:
 kubectl create namespace kafka
 kubectl create -f 'https://strimzi.io/install/latest?namespace=kafka' -n kafka
 Verify: kubectl get pods -n kafka
-
+---------------------------------------------------------------------------------------------------------------------------------
 3. Deploy Kafka Cluster (dual-role nodes)
 Apply Kafka cluster YAML (with 100 Gi storage for each broker):
 
+(Example kafka-with-dual-role-nodes.yaml)
 apiVersion: kafka.strimzi.io/v1beta2
 kind: KafkaNodePool
 metadata:
@@ -74,13 +75,13 @@ spec:
     userOperator: {}
 
 kubectl apply -f kafka-with-dual-role-nodes.yaml
-
+---------------------------------------------------------------------------------------------------------------------------------
 4. Verify pods and PVCs:
 kubectl get pods -n kafka
 kubectl get kafka -n kafka my-cluster -o yaml | grep conditions -A5
 kubectl get pods -n kafka -o wide
 kubectl get pvc -n kafka
-
+---------------------------------------------------------------------------------------------------------------------------------
 5. Verification
 kubectl -n kafka run kafka-producer-1 \
 -ti --image=quay.io/strimzi/kafka:0.42.0-kafka-3.7.1 \
@@ -95,28 +96,16 @@ kubectl -n kafka run kafka-consumer-1 \
 -- /opt/kafka/bin/kafka-console-consumer.sh \
 --bootstrap-server my-cluster-kafka-bootstrap:9092 \
 --topic my-topic --from-beginning
-
+---------------------------------------------------------------------------------------------------------------------------------
 6. Helpful Commands to Check Strimzi Kafka versions:
 kubectl -n kafka get pods -l strimzi.io/cluster=my-cluster -o jsonpath="{.items[*].spec.containers[*].image}"
 kubectl -n kafka get pods -l name=strimzi-cluster-operator -o jsonpath="{.items[*].spec.containers[*].image}" 
-
+---------------------------------------------------------------------------------------------------------------------------------
 7. Create Kafka Topics
 Create kafka-topics.yaml and apply it:
 kubectl apply -f kafka-topics.yaml
 
-8: Internal bootstrap URL:
-kubectl get kafka my-cluster -n kafka -o=jsonpath='{.status.listeners[?(@.name=="plain")].bootstrapServers}'
-
-8. Connect Microservices
-KAFKA_BROKER: my-cluster-kafka-bootstrap.kafka.svc:9092
-Add to deployment as env variable: KAFKA_BROKER=my-cluster-kafka-bootstrap.kafka.svc:9092
-
-9. Optional External Access
-Add external listener in Kafka YAML and reapply. Then get service via: kubectl get svc -n kafka (AWS will give it alyer 4 loadbalancer)
-
-10. Create the Required Kafka Topics
-
-Example
+Example (kafka-topics.yaml)
 apiVersion: kafka.strimzi.io/v1beta2
 kind: KafkaTopic
 metadata:
@@ -193,7 +182,15 @@ metadata:
 spec:
   partitions: 1
   replicas: 3
-
-kubectl apply -f kafka-topics.yaml
-
-Special Thanks: https://www.youtube.com/watch?v=144O4YumfWk
+---------------------------------------------------------------------------------------------------------------------------------
+8. Internal bootstrap URL:
+kubectl get kafka my-cluster -n kafka -o=jsonpath='{.status.listeners[?(@.name=="plain")].bootstrapServers}'
+---------------------------------------------------------------------------------------------------------------------------------
+9. Connect Microservices
+KAFKA_BROKER: my-cluster-kafka-bootstrap.kafka.svc:9092
+Add to deployment as env variable: KAFKA_BROKER=my-cluster-kafka-bootstrap.kafka.svc:9092
+---------------------------------------------------------------------------------------------------------------------------------
+10. Optional External Access
+Add external listener in Kafka YAML and reapply. Then get service via: kubectl get svc -n kafka (AWS will give it alyer 4 loadbalancer)
+---------------------------------------------------------------------------------------------------------------------------------
+special Thanks: https://www.youtube.com/watch?v=144O4YumfWk
