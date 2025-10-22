@@ -75,3 +75,4 @@ allowVolumeExpansion: true
 volumeBindingMode: WaitForFirstConsumer
 reclaimPolicy: Delete
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Special Thanks: https://github.com/iam-veeramalla/three-tier-architecture-demo/tree/master/EKS
