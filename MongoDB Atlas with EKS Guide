@@ -1,0 +1,38 @@
+1. Create a MongoDB Atlas Cluster
+
+Log in to MongoDB Atlas
+
+Click “Build a Database” → Choose AWS as the cloud provider (to match your EKS region).
+Choose region (e.g. us-east-1) — ideally the same as your EKS cluster for lower latency.
+Configure:
+Tier 
+Backup
+Replication
+Cluster name 
+
+2. Set Up Network Access
+
+Option A — Public Access (quick setup)
+
+In Network Access → IP Access List, add your EKS nodes’ public IPs.
+Later, restrict this using AWS NAT or VPN.
+
+Option B — Private Access (secure, recommended, not explored myself yet)
+In Atlas → Network Access, select Private Endpoint → AWS PrivateLink.
+Follow the guided steps:
+Create a VPC Endpoint in AWS (linked to your EKS VPC).
+Approve the endpoint in Atlas.
+Your MongoDB URI will now point to a private DNS (e.g., cluster0.privatelink.mongodb.net).
+Recommended: Use PrivateLink for production to avoid internet exposure.
+ Configure DNS Resolution for PrivateLink
+If using PrivateLink, ensure EKS pods can resolve Atlas private DNS:
+Enable Private DNS on your AWS VPC endpoint.
+If using custom CoreDNS, add forwarding rules for mongodb.net domains.
+
+3. Create Database User
+
+In Database Access, add a user (e.g., eks-app) with:
+Role: readWrite on your database.
+Password: strong and stored securely (e.g., in AWS Secrets Manager).
+
+
