@@ -1,0 +1,27 @@
+1. Deployment Issue: Updated Code Not Reflecting on Website
+Problem:
+The developer updated the code, and the GitHub Actions pipeline completed successfully, but the changes were not reflecting on the website.
+
+Root Cause:
+When I attempted to manually pull the updated Docker image (instead of relying on the CI/CD pipeline), the image failed to download completely — one of the layers wasn’t pulling successfully. Upon further investigation, I discovered that the instance’s disk space was completely full, which prevented the image from being pulled properly.
+
+Solution:
+I ran the following command to clean up unused Docker data and free up space:
+docker system prune -f --volumes
+
+This freed up approximately 42 GB of disk space. Afterward, developer was able to pull the image successfully, and the website began reflecting the latest changes.
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+2. Application Hang Issue: Node.js Container Not Restarting
+Problem:
+The Node.js application occasionally became unresponsive when an unhandled error occurred. Although the process was stuck, the container itself continued running, requiring the development team to manually restart it.
+
+Root Cause:
+The Dockerfile used by the development team was configured to run the application using nodemon. When an unhandled exception occurred, nodemon did not terminate the container—it kept it in a running state. As a result, neither Docker nor Kubernetes detected the failure, preventing an automatic restart.
+
+Solution:
+We updated the setup to use node instead of nodemon in the Dockerfile, ensuring that the container exits when an unhandled error occurs.
+Additionally, we added a restart policy in the Docker Compose file to automatically restart containers when they fail.
+
+In the Kubernetes environment, this change aligned perfectly with Kubernetes’ native restart mechanism. When the Node.js process exits, the Pod automatically restarts, ensuring continuous availability.
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
