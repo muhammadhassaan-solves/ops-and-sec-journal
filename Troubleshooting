@@ -1,4 +1,47 @@
-1. Deployment Issue: Updated Code Not Reflecting on Website
+Request Size Limitation: Large API Payloads Failing
+Date: 22/09/2025
+
+Problem:
+Developers reported that API requests with large payloads (such as file uploads) were failing. The error returned was:
+413 Request Entity Too Large
+In short, the server was rejecting large requests before they could reach the application backend.
+
+Root Cause:
+By default, Nginx limits the maximum allowed request body size to 1 MB.
+Any request exceeding this limit was blocked by Nginx, preventing it from being processed by the application.
+
+Solution:
+We increased the allowed request size and timeout values in the Nginx configuration.
+Under the server block, the following directives were added:
+client_max_body_size 200M;
+client_body_timeout 900;
+
+After updating the configuration, the changes were tested and applied:
+nginx -t
+systemctl reload nginx
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------
+Github Actions CI/CD Automation: RAG WebUI App Deployment
+Date: 24/09/2025
+
+Problem:
+Needed a fully automated CI/CD pipeline to:
+Build frontend and backend on push to master.
+Create and push Docker image to Docker Hub.
+Deploy container to production server.
+
+Root Cause of Failure:
+Node.js memory limit: Frontend build required more heap than default.
+Peer dependency conflicts: npm ci failed due to unresolved peer deps.
+
+Solution:
+Increase Node.js Heap in Docker Build
+RUN npm install --legacy-peer-deps
+ENV NODE_OPTIONS="--max-old-space-size=8192"
+RUN npm run pyodide:fetch && npm run build
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Deployment Issue: Updated Code Not Reflecting on Website
+Date: 22/10/2025
+
 Problem:
 The developer updated the code, and the GitHub Actions pipeline completed successfully, but the changes were not reflecting on the website.
 
@@ -11,7 +54,9 @@ docker system prune -f --volumes
 
 This freed up approximately 42 GB of disk space. Afterward, developer was able to pull the image successfully, and the website began reflecting the latest changes.
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-2. Application Hang Issue: Node.js Container Not Restarting
+Application Hang Issue: Node.js Container Not Restarting
+Date: 24/10/2025
+
 Problem:
 The Node.js application occasionally became unresponsive when an unhandled error occurred. Although the process was stuck, the container itself continued running, requiring the development team to manually restart it.
 
