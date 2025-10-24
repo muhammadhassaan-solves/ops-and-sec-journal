@@ -1,0 +1,31 @@
+I tried auomated Win-Acme Method but it was showing this error:
+getting this error
+System.Net.Http.WinHttpException (80072EFF, 12030): 
+Error 12030 calling WINHTTP_CALLBACK_STATUS_REQUEST_ERROR,
+'The connection with the server was terminated abnormally'
+
+most probably it was protocol issue. So, I did it manually.
+
+1. Install openssl
+https://slproweb.com/products/Win32OpenSSL.html
+
+2. Get CSR from ZeroSSL
+
+3. Place the validation txt file(http-01 method)
+Open IIS Manager 
+In Connections → expand Sites → select your site (abc.tech)
+On the right panel, click explore
+Create .well-known\pki-validation
+
+4. Verfiy at the place of your domain 
+http://abc.tech/.well-known/pki-validation/5556BEDE913B7B2A5881F97E4BE16A6B.txt
+
+5. Download zip file of cert
+
+6. Open Command Prompt and cd to the respective folder where you have extracted cert, ket and csr then use the following command
+"C:\Program Files\OpenSSL-Win64\bin\openssl.exe" pkcs12 -export -out mycert.pfx -inkey private.key -in certificate.crt -certfile ca_bundle.crt
+
+7. At the .pfc file in server certificates.
+
+ProTip:
+add port 443 and tick require server name indication if you want to host mulitple websites on 443 from same server. 
