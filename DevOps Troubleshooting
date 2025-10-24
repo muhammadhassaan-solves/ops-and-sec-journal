@@ -19,6 +19,7 @@ client_body_timeout 900;
 After updating the configuration, the changes were tested and applied:
 nginx -t
 systemctl reload nginx
+
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------
 Github Actions CI/CD Automation: RAG WebUI App Deployment
 Date: 24/09/2025
@@ -38,6 +39,32 @@ Increase Node.js Heap in Docker Build
 RUN npm install --legacy-peer-deps
 ENV NODE_OPTIONS="--max-old-space-size=8192"
 RUN npm run pyodide:fetch && npm run build
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+CORS Header Configuration Fix
+Date: 1/10/2025
+
+Problem:
+Browsers were blocking API requests due to missing or undefined CORS headers.
+Error cause:
+Access-Control-Allow-Origin: undefined
+The backend server attempted to set Access-Control-Allow-Origin, but the value was missing. As a result, browsers rejected the response.
+
+Root Cause:
+The .env configuration did not include the allowed frontend domain in the origin list.
+When the request domain wasn’t defined, the CORS middleware sent an empty header, triggering browser rejection.
+
+Solution:
+Added the required frontend domain to environment variables via Kubernetes secrets.
+Ensured Access-Control-Allow-Origin is dynamically set based on allowed origins from environment variables.
+Recommended switching to a list-based configuration (e.g., comma-separated domains) instead of hardcoding multiple variables.
+
+DevOps Handling Guide:
+If this error reoccurs:
+Ask the developer which domain is making the request.
+Compare it with the allowed origins in .env.
+
+If missing, update the environment configuration.
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Deployment Issue: Updated Code Not Reflecting on Website
 Date: 22/10/2025
