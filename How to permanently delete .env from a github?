@@ -1,0 +1,8 @@
+1. python3 -m venv vir-env
+2. source vir-env/bin/activate
+3. pip install git-filter-repo
+4. git clone https://github.com/ORG-NAME/repo-name
+5. git checkout repo-name
+6. git filter-repo --path .env --invert-paths
+7. git push origin report-erp --force
+8. Ask Developer "Please remove the local repo in GitHub Desktop and re-clone it from GitHub"
