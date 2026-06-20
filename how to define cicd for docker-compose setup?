@@ -1,0 +1,47 @@
+1. Setup SSH Deploy Key for EC2
+ssh ubuntu@YOUR_EC2_IP
+ssh-keygen -t ed25519 -C "github-deploy-key"
+cat ~/.ssh/id_ed25519.pub
+Go to GitHub Repo → Settings → Deploy Keys → Add Key
+eval "$(ssh-agent -s)"
+ssh-add ~/.ssh/id_ed25519
+ssh -T git@github.com
+git remote -v
+git remote set-url origin git@github.com:ORG-TECH/health-status.git
+git pull origin main
+
+  
+2. For github actions, use the following:
+name: health-status ci/cd 
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy_to_server:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: SSH & deploy
+        uses: appleboy/ssh-action@v0.1.6
+
+        with:
+          host: ${{ secrets.EC2_SERVER_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SERVER_KEY }}
+
+          script: |
+            set -e
+
+            echo "Moving to project directory"
+            cd /home/ubuntu/health-status
+
+            echo "Pulling latest code"
+            git reset --hard
+            git pull origin main
+
+            echo "Building and restarting containers"
+            docker compose up -d --build --remove-orphans
+
+            echo "Deployment completed successfully"
