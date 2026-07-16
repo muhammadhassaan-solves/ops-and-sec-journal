@@ -1,5 +1,7 @@
 First, ensure MongoDB Database Tools (mongodump, mongorestore) are installed and the required Atlas network access and permissions are configured.
 
+Managed Service Case (Example MongoDB Atlas)
+
 For Backup:
 mongodump \
   --uri="" \
@@ -20,3 +22,67 @@ mongorestore \
   --drop
 
 --drop removes existing collections before restoring them.
+
+----------------------------------------------------------------------
+Container running on Server Case
+
+Step 1: Create a Backup
+
+Run the backup command inside the MongoDB container:
+
+docker exec container-name mongodump \
+  --username <username> \
+  --password '<password>' \
+  --authenticationDatabase admin \
+  --archive=/tmp/mongodb-backup.gz \
+  --gzip
+
+docker exec container-name ls -lh /tmp/mongodb-backup.gz
+
+Step 2: Copy the Backup from the Container
+
+Copy the backup from the Docker container to the server:
+
+docker cp \
+container-name:/tmp/mongodb-backup.gz \
+/home/ubuntu/mongodb-backup.gz
+
+# Step 3: Remove the Backup from the Container (Optional)
+
+docker exec container-name rm -f /tmp/mongodb-backup.gz
+
+# Step 4: Transfer the Backup to Your Local Machine
+
+Run the following command from your local Linux machine:
+
+scp -i ~/.ssh/file.pem \
+ubuntu@<SERVER_IP>:/home/ubuntu/mongodb-backup.gz \
+.
+
+# Step 5: Create a Temporary MongoDB Container for Testing
+
+docker run -d \
+  --name mongodb-backup-test \
+  -p 27018:27017 \
+  mongo:8
+
+# Step 6: Copy the Backup into the Test Container
+
+docker cp \
+mongodb-backup.gz \
+mongodb-backup-test:/tmp/mongodb-backup.gz
+
+# Step 7: Restore the Backup
+
+docker exec mongodb-backup-test mongorestore \
+  --archive=/tmp/mongodb-backup.gz \
+  --gzip
+
+# Step 8: Verify Databases
+
+List restored databases:
+
+docker exec mongodb-backup-test \
+mongosh --quiet --eval "show dbs"
+
+
