@@ -1,3 +1,5 @@
+# First, Configure GitHub SSH Setup on Terminal
+
 #!/bin/bash
 
 read -p "Org Repo URL: " ORG_REPO
