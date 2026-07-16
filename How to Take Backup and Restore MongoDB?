@@ -1,0 +1,22 @@
+First, ensure MongoDB Database Tools (mongodump, mongorestore) are installed and the required Atlas network access and permissions are configured.
+
+For Backup:
+mongodump \
+  --uri="" \
+  --archive=archivename.gz \
+  --gzip
+
+For Restore:
+mongorestore \
+  --uri="" \
+  --archive=archivename.gz \
+  --gzip
+
+For Restore & Replace Existing Data:
+mongorestore \ 
+  --uri="<mongodb-atlas-uri>" \ 
+  --archive=backup.gz \ 
+  --gzip \ 
+  --drop
+
+--drop removes existing collections before restoring them.
