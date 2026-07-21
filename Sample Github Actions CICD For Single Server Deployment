@@ -1,0 +1,178 @@
+Sample 1: 
+name: sample cicd (your-domain.com/your-service/)
+on:
+  push:
+    branches: [ "main" ]
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME: your-dockerhub-username/your-image-name
+  CONTAINER_NAME: your-container-name
+  SERVER_PORT: 8080
+  HEALTH_PATH: /health
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_UNAME }}
+          password: ${{ secrets.DOCKER_PASS }}
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          push: true
+          tags: ${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
+
+  deploy_to_server:
+    runs-on: ubuntu-latest
+    needs: build
+    concurrency:
+      group: deploy-${{ env.CONTAINER_NAME }}
+      cancel-in-progress: false
+    steps:
+      - name: SSH & deploy container (blue-green with health check)
+        uses: appleboy/ssh-action@v0.1.6
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            set -e
+            IMAGE_TAG="${{ env.IMAGE_NAME }}:sha-${{ github.sha }}"
+            NEW_CONTAINER="${{ env.CONTAINER_NAME }}_new"
+            NEW_PORT=$(( ${{ env.SERVER_PORT }} + 1 ))
+
+            echo "Logging in to Docker Hub..."
+            echo "${{ secrets.DOCKER_PASS }}" | docker login -u "${{ secrets.DOCKER_UNAME }}" --password-stdin
+
+            echo "Pulling image $IMAGE_TAG..."
+            docker pull "$IMAGE_TAG"
+
+            echo "Cleaning up any leftover new container from a previous failed run..."
+            docker rm -f "$NEW_CONTAINER" || true
+
+            echo "Starting new container on temporary port $NEW_PORT..."
+            docker run -d \
+              --name "$NEW_CONTAINER" \
+              --restart unless-stopped \
+              -p "$NEW_PORT:8000" \
+              -e VERSION=${{ github.sha }} \
+              -v /home/${{ secrets.SERVER_USER }}/env/your-service.env:/app/.env \
+              -v /home/${{ secrets.SERVER_USER }}/data:/app/data \
+              "$IMAGE_TAG"
+
+            echo "Waiting for new container to become healthy..."
+            HEALTHY=false
+            for i in $(seq 1 15); do
+              if curl -fs "http://localhost:$NEW_PORT${{ env.HEALTH_PATH }}" > /dev/null; then
+                HEALTHY=true
+                echo "Health check passed on attempt $i."
+                break
+              fi
+              echo "Attempt $i failed, retrying in 2s..."
+              sleep 2
+            done
+
+            if [ "$HEALTHY" != "true" ]; then
+              echo "Health check FAILED. Rolling back — leaving old container untouched."
+              docker logs "$NEW_CONTAINER" --tail 50 || true
+              docker rm -f "$NEW_CONTAINER" || true
+              exit 1
+            fi
+
+            echo "Health check passed. Cutting over traffic..."
+            docker rm -f ${{ env.CONTAINER_NAME }} || true
+            docker rm -f "$NEW_CONTAINER"
+
+            echo "Starting final container on production port ${{ env.SERVER_PORT }}..."
+            docker run -d \
+              --name ${{ env.CONTAINER_NAME }} \
+              --restart unless-stopped \
+              -p ${{ env.SERVER_PORT }}:8000 \
+              -e VERSION=${{ github.sha }} \
+              -v /home/${{ secrets.SERVER_USER }}/env/your-service.env:/app/.env \
+              -v /home/${{ secrets.SERVER_USER }}/data:/app/data \
+              "$IMAGE_TAG"
+
+            echo "Pruning images older than 7 days (currently running image is never touched)..."
+            docker image prune -af --filter "until=168h"
+
+            echo "Deployment completed!"
+
+
+Sample 2: (for dev environments)
+name: sample api dev ci/cd (yourdomain.com/sample-api/)
+
+on:
+  push:
+    branches: [main]
+
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME: your-dockerhub-username/your-image-name   # organization/username + image name
+  CONTAINER_NAME: your-container-name                   # can be anything
+  SERVER_PORT: 8000                                     # unique cloud server port
+  CONTAINER_PORT: 4000                                  # application port
+  IMAGE_TAG: beta                                       # development image tag
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4 # Fetch repository code to GitHub runner
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_UNAME }}
+          password: ${{ secrets.DOCKER_PASS }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+
+  deploy_to_server:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: SSH & deploy container
+        uses: appleboy/ssh-action@v0.1.6
+        with:
+          host: ${{ secrets.SERVER_HOST_DEV }}
+          username: ubuntu
+          key: ${{ secrets.SERVER_SSH_KEY_DEV }}
+          script: |
+            echo "Logging in to Docker Hub on remote server..."
+            echo "${{ secrets.DOCKER_PASS }}" | docker login \
+              -u "${{ secrets.DOCKER_UNAME }}" \
+              --password-stdin
+
+            echo "Pulling latest image..."
+            docker pull ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+
+            echo "Stopping existing container (if any)..."
+            docker stop ${{ env.CONTAINER_NAME }} || true
+            docker rm ${{ env.CONTAINER_NAME }} || true
+
+            echo "Running container..."
+            docker run -d \
+              --name ${{ env.CONTAINER_NAME }} \
+              --restart always \
+              -p ${{ env.SERVER_PORT }}:${{ env.CONTAINER_PORT }} \
+              ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+
+            echo "Deployment completed!"
