@@ -1,0 +1,133 @@
+Use this as a workaround when your Windows ACME client fails to issue a certificate.
+
+1. Request the certificate
+
+On Your Linux or WSL:
+
+sudo certbot certonly --manual --preferred-challenges http -d your-domain.com
+
+2. Create the challenge folder
+
+On the Windows Server, open PowerShell as Administrator:
+
+```powershell
+$webRoot = "C:\path\to\your\website"
+
+$challengePath = Join-Path $webRoot ".well-known\acme-challenge"
+
+New-Item -ItemType Directory -Path $challengePath -Force | Out-Null
+```
+
+3. Allow IIS to serve extensionless files
+
+Run:
+
+```powershell
+$webConfigPath = Join-Path $challengePath "web.config"
+
+@'
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+  <system.webServer>
+    <staticContent>
+      <remove fileExtension="." />
+      <mimeMap fileExtension="." mimeType="text/plain" />
+    </staticContent>
+
+    <handlers>
+      <clear />
+      <add name="ACME-StaticFile"
+           path="*"
+           verb="GET,HEAD"
+           modules="StaticFileModule"
+           resourceType="File"
+           requireAccess="Read" />
+    </handlers>
+  </system.webServer>
+</configuration>
+'@ | Set-Content `
+  -Path $webConfigPath `
+  -Encoding UTF8
+```
+
+Restart IIS if the configuration is not applied immediately:
+
+```powershell
+iisreset
+```
+
+4. Create the challenge file
+
+Replace the placeholders with the values shown by Certbot:
+
+```powershell
+$token = "<TOKEN_FROM_CERTBOT>"
+$content = "<CONTENT_FROM_CERTBOT>"
+
+Set-Content `
+    -Path (Join-Path $challengePath $token) `
+    -Value $content `
+    -NoNewline
+```
+
+5. Verify the challenge
+
+```powershell
+curl.exe "http://your-domain.com/.well-known/acme-challenge/$token"
+```
+
+The response must exactly match `$content`.
+
+Only after this works, return to Certbot and press Enter.
+
+6. Convert the certificate to PFX
+
+```bash
+sudo openssl pkcs12 -export \
+  -out certificate.pfx \
+  -inkey /etc/letsencrypt/live/your-domain.com/privkey.pem \
+  -in /etc/letsencrypt/live/your-domain.com/fullchain.pem
+```
+  
+7. Copy the PFX to the Windows Server
+
+The PFX contains the private key. Do not upload it to GitHub or share it publicly.
+
+8. Import the certificate
+
+```powershell
+$password = Read-Host "Enter PFX password" -AsSecureString
+
+Import-PfxCertificate `
+    -FilePath "C:\Temp\certificate.pfx" `
+    -CertStoreLocation Cert:\LocalMachine\My `
+    -Password $password
+```
+
+9. Bind the certificate in IIS
+
+Open:
+
+IIS Manager
+→ Sites
+→ Your Site
+→ Bindings
+→ HTTPS
+→ Edit
+
+Select the imported certificate and click OK.
+
+```powershell
+iisreset
+```
+10. Clean up
+
+After confirming HTTPS works, delete the PFX file:
+
+```powershell
+Remove-Item "C:\Temp\certificate.pfx" -Force
+```
+
+Keep the challenge-folder `web.config` for future renewals.
+
+Certificates issued with manual Certbot validation do not renew automatically. Repeat this process before the certificate expires.
